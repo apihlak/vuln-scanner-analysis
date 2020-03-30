@@ -19,18 +19,17 @@ from elasticsearch import Elasticsearch, RequestsHttpConnection, helpers
 
 def get_args():
     global args
-    parser = argparse.ArgumentParser(description="CLI tool to scan images")
-    group = parser.add_mutually_exclusive_group(required=False)
+    parser = argparse.ArgumentParser(description="Trivy Scanner CLI tool to scan images")
+    parser.add_argument("--image", type=str, required=True ,help="Image to check, ex. \"alpine:latest\"")
+    parser.add_argument("--enforce", action="store_true", help="Set exit code to 1 (error). Default 0")
+    parser.add_argument("--severity", type=str, default="UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL", help="severities of vulnerabilities to be displayed (comma separated) (default: \"UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL\")")
+    parser.add_argument("--es-host", default="192.168.1.7", type=str, help="Elasticsearch host")
+    parser.add_argument("--es-port", default=9200, type=int, help="Elasticsearch port")
+
     parser.add_argument("--es-username", type=str, help="Elasticsearch username")
     parser.add_argument("--es-password", type=str, help="Elasticsearch password")
-
-    parser.add_argument("--image", type=str, default="alpine:latest", help="Image to check, default is \"alpine\"")
-
-    parser.add_argument("--es-host", default="192.168.1.7", type=str, help="Elasticsearch host")
-    parser.add_argument("--es-port", default=9200, type=int, help="Elasticsearch host")
-
+    
     args = parser.parse_args()
-
     return args
 
 def testPort(host,port):
@@ -144,7 +143,9 @@ def ship_to_es(entries_to_push):
     print(f'Sent bulk of {len(entries_to_push)} messages to ES - {args.image}')
 
 def main():
+
     args = get_args()
+
     client = docker.from_env(timeout=180)
 
     try:
@@ -158,10 +159,18 @@ def main():
     db_file = "/root/.cache/trivy/db/trivy.db"
 
     if os.path.isfile(db_file) == False or (os.path.isfile(db_file) and time.time() - os.path.getctime(db_file) > 3600):
-        scan_output = client.containers.run(image="aquasec/trivy", volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'ro'}, '/root/.cache/': {'bind': '/root/.cache/', 'mode': 'rw'}}, auto_remove=True, command=f'-f json --ignorefile /root/.cache/.trivyignore -q {args.image}').decode('utf-8')
+        try:
+            scan_output = client.containers.run(image="aquasec/trivy:latest", volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'ro'}, '/root/.cache/': {'bind': '/root/.cache/', 'mode': 'rw'}}, auto_remove=True, command=f'-f json --severity {args.severity} --ignorefile /root/.cache/.trivyignore -q {args.image}').decode('utf-8')
+        except:
+            print(f'Unknown OS {args.image}')
+            exit()
     else:
-        scan_output = client.containers.run(image="aquasec/trivy", volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'ro'}, '/root/.cache/': {'bind': '/root/.cache/', 'mode': 'rw'}}, auto_remove=True, command=f'-f json --skip-update --ignorefile /root/.cache/.trivyignore -q {args.image}').decode('utf-8')
-        
+        try:
+            scan_output = client.containers.run(image="aquasec/trivy:latest", volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'ro'}, '/root/.cache/': {'bind': '/root/.cache/', 'mode': 'rw'}}, auto_remove=True, command=f'-f json --severity {args.severity} --skip-update --ignorefile /root/.cache/.trivyignore -q {args.image}').decode('utf-8')
+        except:
+            print(f'Unknown OS {args.image}')
+            exit()
+
     if scan_output[-1] != ']':
         scan_outputs = json.loads(f'{scan_output}]')
     else:
@@ -203,10 +212,15 @@ def main():
                 # Image severity count
                 print(severity_data)
                 print("Debug: Could not connect to Elasticsearch")
-            
+            if args.enforce:
+                enforce = 1
+            else:
+                enforce = 0
         else:
             print(f'No vulnerabilities in {args.image}')
+            enforce = 0
     client.images.remove(args.image)
+    exit(enforce)
 
 if __name__ == '__main__':
     main()
