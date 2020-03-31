@@ -220,13 +220,15 @@ def main():
                 else:
                     enforce = 0
             else:
-                print(f'No vulnerabilities in {args.image}')
                 enforce = 0
+                print(f'No vulnerabilities in {args.image}')
     else:
-        enforce = 0
+        if "Total: 0" in scan_output:
+            enforce = 0
+        else:    
+            enforce = 1
         print(scan_output)
     #client.images.remove(args.image)
-    print(f'Exit code {enforce}')
     sys.exit(enforce)
 
 if __name__ == '__main__':
