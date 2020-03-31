@@ -3,7 +3,7 @@
 # Prerequisite is Docker socket in localhost
 # If Elasticsearch port anwers then data is to the ES otherwise output is in stdout
 # Example:
-# sudo ./image_scanner.py --image=ubuntu:16.04
+# sudo ./image_scanner.py --image=ubuntu:16.04 --severity HIGH,CRITICAL --enforce
 
 import os
 import os.path
@@ -158,67 +158,69 @@ def main():
 
     db_file = "/root/.cache/trivy/db/trivy.db"
 
-    if os.path.isfile(db_file) == False or (os.path.isfile(db_file) and time.time() - os.path.getctime(db_file) > 3600):
-        try:
-            scan_output = client.containers.run(image="aquasec/trivy:latest", volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'ro'}, '/root/.cache/': {'bind': '/root/.cache/', 'mode': 'rw'}}, auto_remove=True, command=f'-f json --severity {args.severity} --ignorefile /root/.cache/.trivyignore -q {args.image}').decode('utf-8')
-        except:
-            print(f'Unknown OS {args.image}')
-            exit()
-    else:
-        try:
-            scan_output = client.containers.run(image="aquasec/trivy:latest", volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'ro'}, '/root/.cache/': {'bind': '/root/.cache/', 'mode': 'rw'}}, auto_remove=True, command=f'-f json --severity {args.severity} --skip-update --ignorefile /root/.cache/.trivyignore -q {args.image}').decode('utf-8')
-        except:
-            print(f'Unknown OS {args.image}')
-            exit()
-
-    if scan_output[-1] != ']':
-        scan_outputs = json.loads(f'{scan_output}]')
-    else:
-        scan_outputs = json.loads(scan_output)
-
     # If Elasticsearch port answers then send to ES otherwise print to stdout
     testResult = testPort(args.es_host, args.es_port)
-    for scan_output in scan_outputs:
-        entries_to_push = []
-        severity_array = []
-        if scan_output['Vulnerabilities']:
-            #os.remove(f'/root/.cache/trivy/fanal/{args.image}')
-            for vulnerability in scan_output['Vulnerabilities']:
-                    result = (parser(scan_output,vulnerability))
-                    # # Add image vulnerability severity count
-                    severity = vulnerability['Severity']
-                    severity_array.append(severity)
-                    keys = Counter(severity_array).keys()
-                    values = Counter(severity_array).values()
-                    if testResult == True:
+    if testResult == True:
+        o_format = "json"
+    else:
+        o_format = "table"
+    
+    if os.path.isfile(db_file) == False or (os.path.isfile(db_file) and time.time() - os.path.getctime(db_file) > 3600):
+        try:
+            scan_output = client.containers.run(image="aquasec/trivy:latest", volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'ro'}, '/root/.cache/': {'bind': '/root/.cache/', 'mode': 'rw'}}, auto_remove=True, command=f'-f {o_format} --severity {args.severity} --ignorefile /root/.cache/.trivyignore -q {args.image}').decode('utf-8')
+        except:
+            print(f'Unknown OS {args.image}')
+            exit()
+    else:
+        try:
+            scan_output = client.containers.run(image="aquasec/trivy:latest", volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'ro'}, '/root/.cache/': {'bind': '/root/.cache/', 'mode': 'rw'}}, auto_remove=True, command=f'-f {o_format} --severity {args.severity} --skip-update --ignorefile /root/.cache/.trivyignore -q {args.image}').decode('utf-8')
+        except:
+            print(f'Unknown OS {args.image}')
+            exit()
+
+    if testResult == True:
+
+        if scan_output[-1] != ']':
+            scan_outputs = json.loads(f'{scan_output}]')
+        else:
+            scan_outputs = json.loads(scan_output)
+
+        for scan_output in scan_outputs:
+            entries_to_push = []
+            severity_array = []
+            if scan_output['Vulnerabilities']:
+                #os.remove(f'/root/.cache/trivy/fanal/{args.image}')
+                for vulnerability in scan_output['Vulnerabilities']:
+                        result = (parser(scan_output,vulnerability))
+                        # # Add image vulnerability severity count
+                        severity = vulnerability['Severity']
+                        severity_array.append(severity)
+                        keys = Counter(severity_array).keys()
+                        values = Counter(severity_array).values()
                         entries_to_push.append({"_index": "<audit-images-{now/w{YYYY.ww}}>", "_source": result})
-                    else:
-                        # Print result
-                        print(result)
-            severity_data = {}
-            severity_data['@timestamp'] = result['@timestamp']
-            severity_data['image'] = result['image']
-            severity_data['registry'] = result['registry']
-            severity_data['repository'] = result['repository']
-            severity_data['service_name'] = result['service_name']
-            severity_data['version'] = result['version']
-            severity_data['message'] = "Image severity"
-            severity_data['severity'] = dict(zip(keys, values))
-            
-            if testResult == True:
+                severity_data = {}
+                severity_data['@timestamp'] = result['@timestamp']
+                severity_data['image'] = result['image']
+                severity_data['registry'] = result['registry']
+                severity_data['repository'] = result['repository']
+                severity_data['service_name'] = result['service_name']
+                severity_data['version'] = result['version']
+                severity_data['message'] = "Image severity"
+                severity_data['severity'] = dict(zip(keys, values))
+                
                 entries_to_push.append({"_index": "<audit-images-{now/w{YYYY.ww}}>", "_source": severity_data})
                 ship_to_es(entries_to_push)
+                
+                if args.enforce:
+                    enforce = 1
+                else:
+                    enforce = 0
             else:
-                # Image severity count
-                print(severity_data)
-                print("Debug: Could not connect to Elasticsearch")
-            if args.enforce:
-                enforce = 1
-            else:
+                print(f'No vulnerabilities in {args.image}')
                 enforce = 0
-        else:
-            print(f'No vulnerabilities in {args.image}')
-            enforce = 0
+    else:
+        enforce = 0
+        print(scan_output)
     client.images.remove(args.image)
     exit(enforce)
 
