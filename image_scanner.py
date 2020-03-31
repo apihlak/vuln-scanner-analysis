@@ -149,10 +149,13 @@ def main():
     client = docker.from_env(timeout=180)
 
     try:
-        test = client.images.pull(args.image)
+        test = client.images.get(args.image)
     except docker.errors.ImageNotFound:
-        print(f'Pull access denied for {args.image}')
-        exit()
+        try:
+            test = client.images.pull(args.image)
+        except docker.errors.ImageNotFound:
+            print(f'Pull access denied for {args.image}')
+            exit()
 
     print(f'Scanning image: {args.image}')
 
