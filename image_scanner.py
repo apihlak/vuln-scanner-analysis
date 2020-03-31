@@ -24,7 +24,7 @@ def get_args():
     parser.add_argument("--image", type=str, required=True ,help="Image to check, ex. \"alpine:latest\"")
     parser.add_argument("--enforce", action="store_true", help="Set exit code to 1 (error). Default 0")
     parser.add_argument("--severity", type=str, default="UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL", help="severities of vulnerabilities to be displayed (comma separated) (default: \"UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL\")")
-    parser.add_argument("--es-host", default="192.168.1.7", type=str, help="Elasticsearch host")
+    parser.add_argument("--es-host", default="192.168.1.8", type=str, help="Elasticsearch host")
     parser.add_argument("--es-port", default=9200, type=int, help="Elasticsearch port")
 
     parser.add_argument("--es-username", type=str, help="Elasticsearch username")
@@ -224,10 +224,10 @@ def main():
                 enforce = 0
                 print(f'No vulnerabilities in {args.image}')
     else:
-        if "Total: 0" in scan_output:
-            enforce = 0
-        else:    
+        if args.enforce and not "Total: 0" in scan_output:
             enforce = 1
+        else:
+            enforce = 0
             print("Enforcement mode: Vulnerability found")
         print(scan_output)
     #client.images.remove(args.image)
