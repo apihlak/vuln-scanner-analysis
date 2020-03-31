@@ -226,6 +226,7 @@ def main():
         enforce = 0
         print(scan_output)
     #client.images.remove(args.image)
+    print(f'Exit code {enforce}')
     sys.exit(enforce)
 
 if __name__ == '__main__':
