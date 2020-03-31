@@ -217,6 +217,7 @@ def main():
                 
                 if args.enforce:
                     enforce = 1
+                    print("Enforcement mode: Vulnerability found")
                 else:
                     enforce = 0
             else:
@@ -227,6 +228,7 @@ def main():
             enforce = 0
         else:    
             enforce = 1
+            print("Enforcement mode: Vulnerability found")
         print(scan_output)
     #client.images.remove(args.image)
     sys.exit(enforce)
