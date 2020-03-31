@@ -7,6 +7,7 @@
 
 import os
 import os.path
+import sys
 import docker
 import json
 import datetime
@@ -225,7 +226,7 @@ def main():
         enforce = 0
         print(scan_output)
     client.images.remove(args.image)
-    exit(enforce)
+    sys.exit(enforce)
 
 if __name__ == '__main__':
     main()
