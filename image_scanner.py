@@ -225,7 +225,7 @@ def main():
     else:
         enforce = 0
         print(scan_output)
-    client.images.remove(args.image)
+    #client.images.remove(args.image)
     sys.exit(enforce)
 
 if __name__ == '__main__':
