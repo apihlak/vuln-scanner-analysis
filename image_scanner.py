@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-# Prerequisite is Docker socket in localhost
-# If Elasticsearch port anwers then data is to the ES otherwise output is in stdout
+# Prerequisite - Docker socket in the localhost
+# If Elasticsearch port anwers then data is sent to the Elasticsearch database, otherwise output is sent to stdout
 # Example:
 # sudo ./image_scanner.py --image=ubuntu:16.04 --severity HIGH,CRITICAL --enforce
 
